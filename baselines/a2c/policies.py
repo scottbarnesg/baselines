@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm, sample
+from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm, sample, sample_normal
 
 class LnLstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, nlstm=256, reuse=False):
@@ -87,7 +87,10 @@ class LstmPolicy(object):
 
 class CnnPolicy(object):
 
-    def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False):
+    def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False, continuous_actions=False):
+        self.sess = sess
+        self.continuous_actions = continuous_actions
+
         nbatch = nenv*nsteps
         nh, nw, nc = ob_space.shape
         ob_shape = (nbatch, nh, nw, nc*nstack)
@@ -99,19 +102,43 @@ class CnnPolicy(object):
             h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
             h3 = conv_to_fc(h3)
             h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
-            pi = fc(h4, 'pi', nact, act=lambda x:x)
+            if self.continuous_actions:
+                pi = fc(h4, 'pi', 2*nact, act=lambda x:x)
+                self.mu = fc(pi, 'mu', nact, act=lambda x:x)
+                self.sigma = fc(pi, 'sigma', nact, act=lambda x:x)
+            else:
+                pi = fc(h4, 'pi', nact, act=lambda x:x)
             vf = fc(h4, 'v', 1, act=lambda x:x)
 
         v0 = vf[:, 0]
-        a0 = sample(pi)
+        if self.continuous_actions:
+            a0 = sample_normal(self.mu, self.sigma)
+        else:
+            a0 = sample(pi)
         self.initial_state = [] #not stateful
 
         def step(ob, *_args, **_kwargs):
             a, v = sess.run([a0, v0], {X:ob})
+            #import ipdb; ipdb.set_trace()
+            #print('a: ', a)
+            if np.isnan(a[0]):
+                import ipdb; ipdb.set_trace()
             return a, v, [] #dummy state
 
         def value(ob, *_args, **_kwargs):
             return sess.run(v0, {X:ob})
+
+        def summarize_weights(*_args, **_kwargs):
+            all_layer_vars = sess.run(tf.all_variables())
+            import numpy as np
+            layer_sums = [np.sum(layer_vars) for layer_vars in all_layer_vars]
+            res = np.any(np.isnan(np.sum(layer_sums)))
+            print('Layer weight sums: ', layer_sums)
+            print('NaN weights: ', res)
+            if res:
+                import ipdb; ipdb.set_trace()
+
+        self.summarize_weights = summarize_weights
 
         self.X = X
         self.pi = pi
