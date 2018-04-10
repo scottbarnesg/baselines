@@ -8,6 +8,7 @@ from collections import deque
 def sample(logits):
     noise = tf.random_uniform(tf.shape(logits))
     return tf.argmax(logits - tf.log(-tf.log(noise)), 1)
+    # return logits - tf.log(-tf.log(noise))
 
 def sample_normal(mu, sigma):
     dim = tf.shape(mu)
@@ -55,7 +56,7 @@ def conv(x, scope, nf, rf, stride, pad='VALID', act=tf.nn.relu, init_scale=1.0):
 
 def fc(x, scope, nh, act=tf.nn.relu, init_scale=1.0):
     with tf.variable_scope(scope):
-        nin = x.get_shape()[1].value
+        nin = x.get_shape()[1].value # Changed index from 1 to 0 for particleEnvs
         w = tf.get_variable("w", [nin, nh], initializer=ortho_init(init_scale))
         b = tf.get_variable("b", [nh], initializer=tf.constant_initializer(0.0))
         z = tf.matmul(x, w)+b
@@ -146,12 +147,26 @@ def conv_to_fc(x):
     x = tf.reshape(x, [-1, nh])
     return x
 
-def discount_with_dones(rewards, dones, gamma):
+def discount_with_dones(rewards, dones, gamma, particleEnv=False):
     discounted = []
     r = 0
-    for reward, done in zip(rewards[::-1], dones[::-1]):
-        r = reward + gamma*r*(1.-done) # fixed off by one bug
-        discounted.append(r)
+    # print(dones)
+    if particleEnv == False:
+        for reward, done in zip(rewards[::-1], dones[::-1]):
+            r = reward + gamma*r*(1.-done) # fixed off by one bug
+            discounted.append(r)
+    else:
+        if type(dones) == list:
+            done = dones[0]
+        else:
+            done = dones
+        # print(done)
+        for reward in rewards[::-1]:
+            if type(reward) == list:
+                reward = reward[0]
+            r = reward+gamma*r*(1.-done)
+            discounted.append(r)
+
     return discounted[::-1]
 
 def find_trainable_variables(key):
