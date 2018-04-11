@@ -92,8 +92,8 @@ class Model(object):
         grads = list(zip(grads, params))
         # f itr == 0:
         # trainer = tf.train.RMSPropOptimizer(learning_rate=LR, decay=alpha, epsilon=epsilon)
-
-        _train = tf.train.RMSPropOptimizer(learning_rate=LR, decay=alpha, epsilon=epsilon, name=str(itr)).apply_gradients(grads) # Error here
+        _train = tf.train.AdamOptimizer(learning_rate=LR, name=str(itr)).apply_gradients(grads)  # , decay=alpha, epsilon=epsilon, name=str(itr)).apply_gradients(grads)
+        # _train = tf.train.RMSPropOptimizer(learning_rate=LR, decay=alpha, epsilon=epsilon, name=str(itr)).apply_gradients(grads) # Error here
 
         lr = Scheduler(v=lr, nvalues=total_timesteps, schedule=lrschedule)
 
@@ -432,7 +432,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 # print(states_)
                 # print(masks_)
                 # print(actions_)
-                # print(values_)
+                # print('values: ', values_)
                 for j in range(numAgents):
                     obs[j].append(obs_[0, j])
                     states[j].append(states)
