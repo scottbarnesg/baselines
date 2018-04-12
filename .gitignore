@@ -1,6 +1,7 @@
 *.swp
 *.pyc
 *.py~
+*.png
 .DS_Store
 .idea
 
