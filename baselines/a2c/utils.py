@@ -150,24 +150,22 @@ def conv_to_fc(x):
 def discount_with_dones(rewards, dones, gamma, particleEnv=False):
     discounted = []
     r = 0
-    # print(dones)
-    if particleEnv == False:
-        for reward, done in zip(rewards[::-1], dones[::-1]):
-            r = reward + gamma*r*(1.-done) # fixed off by one bug
-            discounted.append(r)
-    else:
-        if type(dones) == list:
-            done = dones[0]
-        else:
-            done = dones
+    dones = np.asarray(dones)
+    for reward, done in zip(rewards[::-1], dones[::-1]):
+        r = reward + gamma*r*(1.-done) # fixed off by one bug
+        discounted.append(r)
+    # else:
+        # if type(dones) == list:
+    #     while type(dones) == list:
+    #         dones = dones[0]
+    #     done = dones
         # print(done)
-        for reward in rewards[::-1]:
-            if type(reward) == list:
-                reward = reward[0]
-            r = reward+gamma*r*(1.-done)
-            discounted.append(r)
-
-    return discounted[::-1]
+    #     for reward in rewards[::-1]:
+    #         if type(reward) == list:
+    #             reward = reward[0]
+     #        r = reward+gamma*r*(1.-done)
+    #         discounted.append(r)
+    return np.asarray(discounted[::-1])
 
 def find_trainable_variables(key):
     with tf.variable_scope(key):

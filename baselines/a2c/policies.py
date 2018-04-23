@@ -155,9 +155,9 @@ class MlpPolicy(object):
         # print('reuse= ', reuse)
         nbatch = nenv*nsteps
         # print('obs space: ', ob_space)
-        ob_shape = np.asarray([nsteps, ob_space[itr].shape[0]])
+        ob_shape = np.asarray([nbatch, ob_space[itr].shape[0]])
         self.ob_space = ob_space
-        self.ob_shape = ob_shape
+        # print('model ob shape: ', ob_shape)
         # nh, nw, nc = ob_space.shape
         # ob_shape = (nbatch, nh, nw, nc*nstack)
         # print('observation shape: ', ob_shape)
