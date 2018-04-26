@@ -164,7 +164,7 @@ class MlpPolicy(object):
         # print('ac_space: ', ac_space)
         if communication == False:
             nact = ac_space[itr].n
-            print('nact: ', nact)
+            # print('nact: ', nact)
         else:
             nact = ac_space[itr].high - ac_space[itr].low # + [1, 1]
         # print('nact: ', nact)

@@ -57,15 +57,15 @@ class EnvVec(VecEnv):
             for i in range(self.num_envs):
                 # print(i)
                 env = self.envs[i]
-                print(action_n)
+                # print(action_n)
                 if self.test == False:
                     a = [[action_n[0][0][0][i], action_n[0][0][1][i]], [action_n[1][0][0][i], action_n[1][0][1][i]]]
                 elif self.communication == True:
                     a = [[action_n[0][0][i], action_n[0][1][i]], [action_n[1][0][i], action_n[1][1][i]]]
                 else:
-                    print(np.asarray(action_n).shape)
+                    # print(np.asarray(action_n).shape)
                     a = [action_n[0][0][i], action_n[1][0][i]]
-                    print(a)
+                    # print(a)
                 # print('a: ', a)
                 ob, rew, done, info = env.step(a)
             # plt.imshow(ob)
@@ -114,9 +114,9 @@ def make_env(scenario_name, benchmark=False, rank=-1, seed=0):
     # create multiagent environment
     # print(world.agents)
     if benchmark:
-        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data)
+        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data, name=scenario_name)
     else:
-        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
+        env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, name=scenario_name)
     env.seed = (seed+rank)
     env.ID = rank
     env.name = scenario_name

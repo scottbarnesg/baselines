@@ -58,9 +58,9 @@ class Model(object):
             step_model = policy(sess, ob_space, ac_space, nenvs, 1, nstack, reuse=tf.AUTO_REUSE, continuous_actions=continuous_actions) #, itr=itr)
             train_model = policy(sess, ob_space, ac_space, nenvs, nsteps, nstack, reuse=tf.AUTO_REUSE, continuous_actions=continuous_actions) #, itr=itr)
         elif communication == False:
-            print('step model')
+            # print('step model')
             step_model = policy(sess, ob_space, ac_space, nenvs, 1, nstack, reuse=False, continuous_actions=continuous_actions, itr=itr, communication=communication)
-            print('train model')
+            # print('train model')
             train_model = policy(sess, ob_space, ac_space, nenvs, nsteps, nstack, reuse=tf.AUTO_REUSE, continuous_actions=continuous_actions, itr=itr, communication=communication)
         else:
             step_model = policy(sess, ob_space, ac_space, nenvs, 1, nstack, reuse=tf.AUTO_REUSE, continuous_actions=continuous_actions, itr=itr, communication=communication)
@@ -284,20 +284,20 @@ class Runner(object):
             for i in range(self.numAgents):
                 # print(i)
                 # print(self.model[i])
-                print('model.step obs: ', (self.obs[:, i]).flatten())
+                # print('model.step obs: ', (self.obs[:, i]).flatten())
                 # print(self.states)
                 # print(self.dones)
                 if self.env.name == 'simple_reference':
                     actions_, values_, states_ = self.model[i].step(self.obs[: ,i].reshape(self.nenv, 21), self.states, self.dones)
                 else:
                     obs_ = []
-                    print('ob_space: ', self.batch_obs_shape)
-                    print(self.obs[:, i].shape)
+                    # print('ob_space: ', self.batch_obs_shape)
+                    # print(self.obs[:, i].shape)
                     for j in range(self.obs[:, i].shape[0]):
                         for k in range(self.batch_obs_shape[i][0]):
                             obs_.append(self.obs[:, i][j][k])
                     obs_ = np.asarray(obs_).reshape(self.nenv, self.batch_obs_shape[i][0])
-                    print(obs_)
+                    # print(obs_)
                     actions_, values_, states_ = self.model[i].step(obs_, self.states, self.dones) # changed reshape from 21
                 # print('modelstep action: ', actions_)
                 # print('obs[i]: ', self.obs[i])
@@ -317,8 +317,8 @@ class Runner(object):
             obs, rewards, dones, _ = self.env.step(np.asarray(actions), self.ind)
         else:
             obs, rewards, dones, _ = self.env.step(actions) # steps through all envs
-            print('env step obs: ', obs.shape)
-            print(obs)
+            # print('env step obs: ', obs.shape)
+            # print(obs)
             # assert 1==0
             # print('a2c obs: ', obs)
             # print('env rewards: ', rewards)
@@ -377,7 +377,7 @@ class Runner(object):
             # print(mb_masks)
             last_values = self.model.value(self.obs, self.states, self.dones).tolist()
         else:
-            print('obs shape: ', np.asarray(mb_obs).shape)
+            # print('obs shape: ', np.asarray(mb_obs).shape)
             mb_obs = np.asarray(mb_obs) #, dtype=np.float32)
             mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
             mb_actions = np.asarray(mb_actions, dtype=np.int32)
@@ -403,9 +403,9 @@ class Runner(object):
         #discount/bootstrap off value fn
         # print(mb_dones)
         # print(mb_obs)
-        print('runner actions: ', mb_actions.shape)
-        print('runner obs: ', mb_obs.shape)
-        print('runner values: ', mb_values.shape)
+        # print('runner actions: ', mb_actions.shape)
+        # print('runner obs: ', mb_obs.shape)
+        # print('runner values: ', mb_values.shape)
         for n, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
             # print(dones)
             rewards = rewards.tolist()
@@ -515,13 +515,13 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
             ev = []
             for i in range(nsteps):
                     obs_, states_, rewards_, masks_, actions_, values_ = runner.run()
-                    print('Runner Shapes')
-                    print(obs_.shape)
-                    print(rewards_.shape)
-                    print('states: ', states_)
-                    print('masks: ', masks_)
-                    print('actions_ ', actions_)
-                    print('values: ', values_[:, 0])
+                    # print('Runner Shapes')
+                    # print(obs_.shape)
+                    # print(rewards_.shape)
+                    # print('states: ', states_)
+                    # print('masks: ', masks_)
+                    # print('actions_ ', actions_)
+                    # print('values: ', values_[:, 0])
                     # assert 1==0
                     # print('masks: ', masks_)
                     for j in range(numAgents):
@@ -592,12 +592,12 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 # np.asarray(masks[i]).reshape(nbatch)
                 # np.asarray(actions[i]).reshape(nbatch)
                 # np.asarray(values[i]).reshape(nbatch)
-                print('all actions', actions)
-                print('all values: ', values)
-                print('values shape: ', np.asarray(values).shape)
+                # print('all actions', actions)
+                # print('all values: ', values)
+                # print('values shape: ', np.asarray(values).shape)
                 # actions_i = np.asarray(actions[not i])
                 if runner.env.name == 'simple_reference':
-                    print(np.asarray(actions).shape)
+                    # print(np.asarray(actions).shape)
                     actions_i = np.asarray(actions[i])
                     actions_i = actions_i.swapaxes(0, 1).reshape(actions_per_agent, nbatch)
                     action_n = [actions_i[1], actions_i[0]]
@@ -607,19 +607,19 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 # policy_loss_, value_loss_, policy_entropy_ = model[i].train(np.asarray(obs[i]).reshape(nbatch, 21), states[i], np.asarray(rewards[i]).reshape(nbatch), np.asarray(masks[i]).reshape(nbatch), np.asarray(actions[i]).reshape(nbatch, actions_per_agent), np.asarray(values[i]).reshape(nbatch))
                     policy_loss_, value_loss_, policy_entropy_ = model[i].train(np.asarray(obs[i]).reshape(nbatch, 21), states[i], np.asarray(rewards[i]).reshape(nbatch), np.asarray(masks[i]).reshape(nbatch), action_n, np.asarray(values[i]).reshape(nbatch))
                 else:
-                    print('action shape: ', np.asarray(actions).shape)
+                    # print('action shape: ', np.asarray(actions).shape)
                     actions_ = np.asarray(actions[:][:][:])
                     actions_i = actions_[:, :, i]
-                    print('action_i: ', actions_i.shape)
-                    print('obs shape: ', np.asarray(obs).shape)
+                    # print('action_i: ', actions_i.shape)
+                    # print('obs shape: ', np.asarray(obs).shape)
                     obs_ = np.asarray(obs).swapaxes(1, 2)
                     obs_i = obs_[i, 0].flatten()
-                    print('obs_i: ', obs_i)
+                    # print('obs_i: ', obs_i)
                     obs_n = []
                     for n in range(obs_i.shape[0]):
                         for m in range(obs_i[0].shape[0]):
                             obs_n.append(obs_i[n][m])
-                    print('obs_n: ', np.asarray(obs_n).shape)
+                    # print('obs_n: ', np.asarray(obs_n).shape)
                     # for n in range()
                     # print('obs: ', obs[i])
                     # print('shape', np.asarray(obs).shape)
@@ -630,8 +630,8 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                     np.asarray(masks[i]).reshape(nbatch)
                     # np.asarray(actions_i).reshape(nbatch)
                     np.asarray(values[i]).reshape(nbatch)
-                    print('all actions: ', actions)
-                    print('actions_i: ',actions_i)
+                    # print('all actions: ', actions)
+                    # print('actions_i: ',actions_i)
                     # assert 1==0
                     policy_loss_, value_loss_, policy_entropy_ = model[i].train(np.asarray(obs_n).reshape(nbatch, runner.batch_obs_shape[i][0]), states[i], np.asarray(rewards[i]).reshape(nbatch), np.asarray(masks[i]).reshape(nbatch), np.asarray(actions_i).reshape(nbatch), np.asarray(values[i]).reshape(nbatch))
                 policy_loss.append(policy_loss_)
