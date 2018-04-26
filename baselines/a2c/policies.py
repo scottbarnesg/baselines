@@ -149,7 +149,7 @@ class CnnPolicy(object):
         self.value = value
 
 class MlpPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False, continuous_actions=False, itr=0, particleEnvs=False):
+    def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False, continuous_actions=False, itr=0, particleEnvs=False, communication=False):
         self.sess = sess
         self.continuous_actions = continuous_actions
         # print('reuse= ', reuse)
@@ -162,15 +162,19 @@ class MlpPolicy(object):
         # ob_shape = (nbatch, nh, nw, nc*nstack)
         # print('observation shape: ', ob_shape)
         # print('ac_space: ', ac_space)
-        nact = ac_space[itr].high - ac_space[itr].low # + [1, 1]
+        if communication == False:
+            nact = ac_space[itr].n
+            print('nact: ', nact)
+        else:
+            nact = ac_space[itr].high - ac_space[itr].low # + [1, 1]
         # print('nact: ', nact)
         X = tf.placeholder(tf.uint8, ob_shape) #obs
         # X = tf.transpose(tf.expand_dims(X, nbatch))
         # print('Input Shape: ', X.get_shape())
         with tf.variable_scope("model", reuse=reuse):
             # f = fc(X, 'fc1', nh=64)
-            f = fc(tf.cast(X, tf.float32), 'fc1', nh=64, init_scale=np.sqrt(2))
-            f2 = fc(f, 'fc2',  nh=64, init_scale=np.sqrt(2))
+            f = fc(tf.cast(X, tf.float32), 'fc1_'+str(itr), nh=64, init_scale=np.sqrt(2))
+            f2 = fc(f, 'fc2_'+str(itr),  nh=64, init_scale=np.sqrt(2))
             # f3 = fc(f2, 'fc3', nh=64, init_scale=np.sqrt(2))
             # h3 = conv_to_fc(h3)
             # h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
@@ -178,21 +182,30 @@ class MlpPolicy(object):
                 pi = fc(f3, 'pi', 2*nact, act=lambda x:x)
                 self.mu = fc(pi, 'mu', nact, act=lambda x:x)
                 self.sigma = fc(pi, 'sigma', nact, act=lambda x:x)
-            else:
+                vf = fc(f2, 'v', 1, act=lambda x:x)
+            elif communication == True:
                 pi_c = fc(f2, 'pi_c', nact[1], act=lambda x:x)
                 pi_u = fc(f2, 'pi_u', nact[0], act=lambda x:x)
+                vf = fc(f2, 'v', 1, act=lambda x:x)
+                self.pi_c = pi_c
+                self.pi_u = pi_u
+            else:
+                pi = fc(f2, 'pi_'+str(itr), nact, act=lambda x:x)
+                vf = fc(f2, 'v_'+str(itr), 1, act=lambda x:x)
+                self.pi = pi
+
             # print('action output size:')
             # print(pi_c.get_shape())
             # print(pi_u.get_shape())
-            vf = fc(f2, 'v', 1, act=lambda x:x)
+            # vf = fc(f2, 'v', 1, act=lambda x:x)
 
         v0 = vf[:, 0]
         if self.continuous_actions:
             a0 = sample_normal(self.mu, self.sigma)
-        else:
+        elif communication == True:
             a0 = [sample(pi_u), sample(pi_c)]
-            # print(a0)
-            # time.sleep(10)
+        else:
+            a0 = sample(pi)
         self.initial_state = [] #not stateful
 
         def step(ob, *_args, **_kwargs):
@@ -220,8 +233,6 @@ class MlpPolicy(object):
         self.summarize_weights = summarize_weights
 
         self.X = X
-        self.pi_c = pi_c
-        self.pi_u = pi_u
         self.vf = vf
         self.step = step
         self.value = value

@@ -23,18 +23,21 @@ import logging
 
 
 class EnvVec(VecEnv):
-    def __init__(self, env_fns, particleEnv, test=False):
+    def __init__(self, env_fns, particleEnv, test=False, communication=False):
         # print(env_fns)
         # self.envs = [fn() for fn in env_fns]
         self.envs = env_fns
         env = self.envs[0]
         self.action_space = env.action_space
+        print('action space', env.action_space)
         self.observation_space = env.observation_space
         self.ts = np.zeros(len(self.envs), dtype='int')
         self.remotes = [0]*len(env_fns)
         self.n = env.n
         self.particleEnv=particleEnv
         self.test = test
+        self.name = env.name
+        self.communication = communication
         print('Successfully Loaded Particle_Env Environments')
         print('----------------------------------------------')
 
@@ -54,10 +57,15 @@ class EnvVec(VecEnv):
             for i in range(self.num_envs):
                 # print(i)
                 env = self.envs[i]
+                print(action_n)
                 if self.test == False:
                     a = [[action_n[0][0][0][i], action_n[0][0][1][i]], [action_n[1][0][0][i], action_n[1][0][1][i]]]
-                else:
+                elif self.communication == True:
                     a = [[action_n[0][0][i], action_n[0][1][i]], [action_n[1][0][i], action_n[1][1][i]]]
+                else:
+                    print(np.asarray(action_n).shape)
+                    a = [action_n[0][0][i], action_n[1][0][i]]
+                    print(a)
                 # print('a: ', a)
                 ob, rew, done, info = env.step(a)
             # plt.imshow(ob)
@@ -111,16 +119,22 @@ def make_env(scenario_name, benchmark=False, rank=-1, seed=0):
         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
     env.seed = (seed+rank)
     env.ID = rank
+    env.name = scenario_name
     return env
 
 def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_actions=False, numAgents=2, benchmark=False):
     # Create environment
-    env = EnvVec([make_env(env_id, benchmark=benchmark, rank=idx, seed=seed) for idx in range(num_cpu)], particleEnv=True)
+    test = True
+    communication = False
+    if env_id == 'simple_reference':
+            communication = True
+            test = False
+    env = EnvVec([make_env(env_id, benchmark=benchmark, rank=idx, seed=seed) for idx in range(num_cpu)], particleEnv=True, test=test, communication=communication)
     # env = make_env(env_id, benchmark)
     # print('action space: ', env.action_space)
     # env = GymVecEnv([make_env(idx) for idx in range(num_cpu)])
     policy_fn = policy_fn_name(policy)
-    learn(policy_fn, env, seed, nsteps=16, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-4, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=False, particleEnv=True, model_name='partEnv_model_', log_interval=100)
+    learn(policy_fn, env, seed, nsteps=16, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-4, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=False, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
 
 def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
     iters = 100
@@ -260,7 +274,7 @@ def policy_fn_name(policy_name):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='simple_reference')
+    parser.add_argument('--env', help='environment ID', default='simple_speaker_listener')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='mlp')
     parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'], default='constant')
@@ -284,4 +298,4 @@ if __name__ == '__main__':
         test(args.env, args.policy, args.seed, nstack=1)
     else:
         train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-              policy=args.policy, lrschedule=args.lrschedule, num_cpu=32, continuous_actions=continuous_actions, numAgents=numAgents)
+              policy=args.policy, lrschedule=args.lrschedule, num_cpu=2, continuous_actions=continuous_actions, numAgents=numAgents)
