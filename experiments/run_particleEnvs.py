@@ -5,9 +5,6 @@ import os
 import tensorflow as tf
 import time
 import pickle
-
-# import maddpg.common.tf_util as U
-# sfrom maddpg.trainer.maddpg import MADDPGAgentTrainer
 import tensorflow.contrib.layers as layers
 
 # baselines libraries
@@ -15,7 +12,6 @@ from baselines import logger
 from baselines.common import set_global_seeds
 from baselines import bench
 from baselines.common.vec_env import VecEnv
-#from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.a2c.a2c import learn, Model
 from baselines.a2c.policies import CnnPolicy, LstmPolicy, LnLstmPolicy, MlpPolicy
 from baselines.a2c.utils import fc, conv, conv_to_fc, sample
@@ -23,13 +19,13 @@ import logging
 
 
 class EnvVec(VecEnv):
-    def __init__(self, env_fns, particleEnv, test=False, communication=False):
+    def __init__(self, env_fns, particleEnv, test=False, communication=False, env_id=None):
         # print(env_fns)
         # self.envs = [fn() for fn in env_fns]
         self.envs = env_fns
         env = self.envs[0]
         self.action_space = env.action_space
-        print('action space', env.action_space)
+        # print('action space', env.action_space)
         self.observation_space = env.observation_space
         self.ts = np.zeros(len(self.envs), dtype='int')
         self.remotes = [0]*len(env_fns)
@@ -38,8 +34,9 @@ class EnvVec(VecEnv):
         self.test = test
         self.name = env.name
         self.communication = communication
-        print('Successfully Loaded Particle_Env Environments')
+        self.env_id = env_id
         print('----------------------------------------------')
+        print('Successfully Loaded Particle_Env Environments')
 
     def step(self, action_n, ind=0):
         obs = []
@@ -57,13 +54,13 @@ class EnvVec(VecEnv):
             for i in range(self.num_envs):
                 # print(i)
                 env = self.envs[i]
-                # print(action_n)
                 if self.test == False:
                     a = [[action_n[0][0][0][i], action_n[0][0][1][i]], [action_n[1][0][0][i], action_n[1][0][1][i]]]
                 elif self.communication == True:
                     a = [[action_n[0][0][i], action_n[0][1][i]], [action_n[1][0][i], action_n[1][1][i]]]
+                elif self.env_id == 'simple_spread':
+                    a = [action_n[0][0][i], action_n[1][0][i]]
                 else:
-                    # print(np.asarray(action_n).shape)
                     a = [action_n[0][0][i], action_n[1][0][i]]
                     # print(a)
                 # print('a: ', a)
@@ -129,7 +126,7 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_a
     if env_id == 'simple_reference':
             communication = True
             test = False
-    env = EnvVec([make_env(env_id, benchmark=benchmark, rank=idx, seed=seed) for idx in range(num_cpu)], particleEnv=True, test=test, communication=communication)
+    env = EnvVec([make_env(env_id, benchmark=benchmark, rank=idx, seed=seed) for idx in range(num_cpu)], particleEnv=True, test=test, communication=communication, env_id=env_id)
     # env = make_env(env_id, benchmark)
     # print('action space: ', env.action_space)
     # env = GymVecEnv([make_env(idx) for idx in range(num_cpu)])
@@ -274,7 +271,7 @@ def policy_fn_name(policy_name):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='simple_speaker_listener')
+    parser.add_argument('--env', help='environment ID', default='simple_spread')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='mlp')
     parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'], default='constant')
@@ -298,4 +295,4 @@ if __name__ == '__main__':
         test(args.env, args.policy, args.seed, nstack=1)
     else:
         train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-              policy=args.policy, lrschedule=args.lrschedule, num_cpu=2, continuous_actions=continuous_actions, numAgents=numAgents)
+              policy=args.policy, lrschedule=args.lrschedule, num_cpu=32, continuous_actions=continuous_actions, numAgents=numAgents)
