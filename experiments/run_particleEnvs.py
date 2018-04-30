@@ -119,7 +119,7 @@ def make_env(scenario_name, benchmark=False, rank=-1, seed=0):
     env.name = scenario_name
     return env
 
-def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_actions=False, numAgents=2, benchmark=False):
+def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_actions=False, numAgents=2, benchmark=True):
     # Create environment
     test = True
     communication = False
@@ -131,7 +131,7 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_a
     # print('action space: ', env.action_space)
     # env = GymVecEnv([make_env(idx) for idx in range(num_cpu)])
     policy_fn = policy_fn_name(policy)
-    learn(policy_fn, env, seed, nsteps=16, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-4, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=False, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
+    learn(policy_fn, env, seed, nsteps=16, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-2, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=False, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
 
 def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
     iters = 100
@@ -275,7 +275,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='mlp')
     parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'], default='constant')
-    parser.add_argument('--num-timesteps', type=int, default=int(1e9))
+    parser.add_argument('--num-timesteps', type=int, default=int(1e7))
     parser.add_argument('-c', '--continuous_actions', default=False, action='store_true')
     parser.add_argument('--test', default=False, action='store_true')
     parser.add_argument('--interactive', default=False, action='store_true')
@@ -295,4 +295,4 @@ if __name__ == '__main__':
         test(args.env, args.policy, args.seed, nstack=1)
     else:
         train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-              policy=args.policy, lrschedule=args.lrschedule, num_cpu=32, continuous_actions=continuous_actions, numAgents=numAgents)
+              policy=args.policy, lrschedule=args.lrschedule, num_cpu=8, continuous_actions=continuous_actions, numAgents=numAgents)
