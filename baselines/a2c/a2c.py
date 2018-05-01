@@ -18,6 +18,8 @@ from baselines.a2c.utils import cat_entropy, mse
 from matplotlib import pyplot as plt
 from itertools import chain
 
+import scipy.io as sio
+
 class Model(object):
 
     def __init__(self, policy, ob_space, ac_space, nenvs, nsteps, nstack, num_procs,
@@ -25,7 +27,7 @@ class Model(object):
                  alpha=0.99, epsilon=1e-5, total_timesteps=int(80e6), lrschedule='linear', continuous_actions=False, debug=False, numAgents=2, itr=1, particleEnv=False, communication=False):
         self.continuous_actions = continuous_actions
         self.nenvs = nenvs
-        # print('numAgents = ' + str(numAgents))
+        print('vf_coef', vf_coef)
         config = tf.ConfigProto(allow_soft_placement=True,
                                 intra_op_parallelism_threads=num_procs,
                                 inter_op_parallelism_threads=num_procs)
@@ -80,7 +82,7 @@ class Model(object):
             # print('A: ', A)
             neglogpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.pi, labels=A)
             vf_loss = tf.reduce_mean(mse(tf.squeeze(train_model.vf), R))
-            entropy = 1.5*tf.reduce_mean(cat_entropy(train_model.pi))
+            entropy = tf.reduce_mean(cat_entropy(train_model.pi))
             pg_loss = tf.reduce_mean(ADV * neglogpac)
             loss = pg_loss - entropy*ent_coef + vf_loss * vf_coef
         else:
@@ -134,11 +136,13 @@ class Model(object):
                     [pg_loss, vf_loss, entropy, grads, _train],
                     td_map
                 )
-                grad_vals = [(np.min(grad_vals), np.max(grad_vals), np.sum(grad_vals)) for grad_vals in all_grad_vals]
-                print('Policy Gradients: ')
-                print(all_grad_vals[9])
-                print('Value Gradients: ')
-                print(all_grad_vals[11])
+                # grad_vals = [(np.min(grad_vals), np.max(grad_vals), np.sum(grad_vals)) for grad_vals in all_grad_vals]
+                # print('Policy Gradients: ')
+                # print(all_grad_vals[9])
+                # print('Value Gradients: ')
+                # print(all_grad_vals[11])
+                print('Gradient Values: ')
+                print(all_grad_vals)
             else:
                 policy_loss, value_loss, policy_entropy, _ = sess.run(
                     [pg_loss, vf_loss, entropy, _train],
@@ -441,21 +445,26 @@ class Runner(object):
             mb_actions = mb_actions.reshape(self.numAgents, self.nenv)
         mb_masks = mb_masks.reshape(self.numAgents, self.nenv)
         mb_values = mb_values.reshape(self.numAgents, self.nenv)
-
+        # print('mb_rewards')
+        # print(mb_rewards)
         return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values
 
-def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_coef=0.5, ent_coef=0.01, max_grad_norm=0.5, lr=7e-4, lrschedule='linear', epsilon=1e-5, alpha=0.99, gamma=0.99, log_interval=25, continuous_actions=True, debug=False, numAgents=2, continueTraining=True, particleEnv=False, model_name='Apr3_test_model_', communication=False):
+def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_coef=0.9, ent_coef=0.01, max_grad_norm=0.5, lr=7e-4, lrschedule='linear', epsilon=1e-5, alpha=0.99, gamma=0.99, log_interval=100, continuous_actions=True, debug=False, numAgents=2, continueTraining=True, particleEnv=False, model_name='Apr3_test_model_', communication=False):
     timesteps = 100000
+    print('nsteps:', nsteps)
+    time.sleep(1)
     tf.reset_default_graph()
-    if particleEnv == False:
-        set_global_seeds(seed)
-
+    # if particleEnv == False:
+    set_global_seeds(seed)
+    avg_rwd_data = []
+    episode_rwd_data = []
     nenvs = env.num_envs
     print('Number of Environments: ', nenvs)
     print('Number of Steps', nsteps)
     nbatch = nenvs*nsteps
     print('Batch Size: ', nbatch)
     print('Learning Rate: ', lr)
+    print('debug: ', debug)
     print('---------------------------------------------')
     ob_space = env.observation_space
     ac_space = env.action_space
@@ -497,6 +506,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 runner.append(Runner(env, model[i], nsteps=nsteps, nstack=nstack, gamma=gamma, ind=i, init_obs=runner[0].init_obs, particleEnv=particleEnv))
 
     tstart = time.time()
+    stored_rewards = [[], []]
     for update in range(1, total_timesteps//nbatch+1):
         if numAgents == 1:
             obs, states, rewards, masks, actions, values = runner.run()
@@ -537,6 +547,8 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                             actions[j].append(actions_[j, :])
                             values[j].append(values_[j, :])
                             masks[j].append(masks_[j, :])
+                        stored_rewards[j].append(rewards_[:, :, j])
+                        # print('rewards: ', rewards_[:, :, j])
 
         else:
             obs = [[], []]
@@ -586,7 +598,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 elif runner.env.name == 'simple_speaker_listener':
                     actions_ = np.asarray(actions)
                     actions_i = actions_[i, :, :]
-                    print('obs shape: ', np.asarray(obs).shape)
+                    # print('obs shape: ', np.asarray(obs).shape)
                     obs_ = np.asarray(obs).swapaxes(1, 2)
                     obs_i = obs_[i, 0].flatten()
                     obs_n = []
@@ -614,6 +626,21 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 logger.record_tabular("nupdates", update)
                 logger.record_tabular("total_timesteps", update*nbatch)
                 logger.record_tabular("fps", float(fps))
+                rewards_i = np.asarray(stored_rewards[i])
+                # print(rewards_i)
+                avg_rwd = np.mean(rewards_i.flatten())
+                print('rwd shape: ', rewards_i.shape)
+                episode_reward = []
+                for j in range(nenvs):
+                    episode_reward.append(np.mean(rewards_i[:, :, j]))
+                print('min_eps_rwd: ', np.min(episode_reward))
+                print('max_eps_rwd: ', np.max(episode_reward))
+                logger.record_tabular("average agent reward", avg_rwd)
+                avg_rwd_data.append(avg_rwd)
+                episode_rwd_data.append(episode_reward)
+                sio.savemat('reward_data.mat', {'avg_rwd':np.asarray(avg_rwd_data)})
+                sio.savemat('episode_reward_data.mat', {'episode_avg_rwd':np.asarray(episode_rwd_data)})
+                # logger.record_tabular("average episode reward", np.mean(episode_reward))
                 if runner.env.name != 'simple_reference':
                     logger.record_tabular("policy_entropy", float(policy_entropy[i]))
                     logger.record_tabular("value_loss",float(value_loss[i]))
@@ -631,6 +658,8 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 m_name = model_name + str(i) + '.pkl'
                 model[i].save(m_name)
                 # print('Saving model as ', m_name)
+            stored_rewards = [[], []]
+
         if particleEnv == False:
             if update*nbatch > timesteps:
                 print('Saving ')

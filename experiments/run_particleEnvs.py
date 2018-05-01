@@ -119,7 +119,7 @@ def make_env(scenario_name, benchmark=False, rank=-1, seed=0):
     env.name = scenario_name
     return env
 
-def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_actions=False, numAgents=2, benchmark=True):
+def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_actions=False, numAgents=2, benchmark=False):
     # Create environment
     test = True
     communication = False
@@ -131,7 +131,7 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_a
     # print('action space: ', env.action_space)
     # env = GymVecEnv([make_env(idx) for idx in range(num_cpu)])
     policy_fn = policy_fn_name(policy)
-    learn(policy_fn, env, seed, nsteps=16, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-2, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=False, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
+    learn(policy_fn, env, seed, nsteps=25, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-2, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=True, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
 
 def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
     iters = 100
@@ -163,7 +163,7 @@ def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
 
     nsteps=5
     total_timesteps=int(80e6)
-    vf_coef=0.5
+    vf_coef=0.9
     ent_coef=0.01
     max_grad_norm=0.5
     lr=7e-4
@@ -224,7 +224,10 @@ def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
                 # print(obs[:, j])
                 # print(states[j])
                 # print(dones)
-                actions[j], values[j], states[j] = model[j].step(obs[:, j].reshape(1, 21), states[j], dones[j])
+                # actions[j], values[j], states[j] = model[j].step(obs[:, j].reshape(1, 21), states[j], dones[j])
+                ob_shape = np.asarray([env.observation_space[i].shape for i in range(env.n)]).flatten()
+                print(ob_shape)
+                actions[j], values[j], states[j] = model[j].step(obs[:, j].reshape(1, ob_shape[1]), states[j], dones[j])
                     # action = actions[0]
                     # value = values[0]
 
@@ -271,7 +274,7 @@ def policy_fn_name(policy_name):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='simple_spread')
+    parser.add_argument('--env', help='environment ID', default='simple_speaker_listener')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='mlp')
     parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'], default='constant')
