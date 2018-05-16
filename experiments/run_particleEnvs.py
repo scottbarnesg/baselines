@@ -44,6 +44,7 @@ class EnvVec(VecEnv):
         dones = []
         infos = []
         imgs = []
+        success = []
         # print('action_n = ' + str(action_n))
         # print(action_n)
         if self.particleEnv == False:
@@ -64,7 +65,8 @@ class EnvVec(VecEnv):
                     a = [action_n[0][0][i], action_n[1][0][i]]
                     # print(a)
                 # print('a: ', a)
-                ob, rew, done, info = env.step(a)
+                ob, rew, done, success_n, info = env.step(a)
+                # print('stew rew: ', rew)
             # plt.imshow(ob)
             # plt.draw()
             # plt.pause(0.000001)
@@ -72,6 +74,7 @@ class EnvVec(VecEnv):
                 obs.append(ob)
                 rews.append(rew)
                 dones.append(done)
+                success.append(success_n)
                 infos.append(info)
                 imgs.append(ob)
         self.ts += 1
@@ -84,7 +87,7 @@ class EnvVec(VecEnv):
                 # print (i)
                 # obs[i] = self.envs[i].reset()
                 self.ts[i] = 0
-        return np.array(imgs), np.array(rews), np.array(dones), infos
+        return np.array(imgs), np.array(rews), np.array(dones), np.array(success), infos
 
     def reset(self):
         results = []
@@ -114,6 +117,7 @@ def make_env(scenario_name, benchmark=False, rank=-1, seed=0):
         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data, name=scenario_name)
     else:
         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, name=scenario_name)
+    # env.seed = np.random.randint(1000)
     env.seed = (seed+rank)
     env.ID = rank
     env.name = scenario_name
@@ -131,7 +135,7 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu, continuous_a
     # print('action space: ', env.action_space)
     # env = GymVecEnv([make_env(idx) for idx in range(num_cpu)])
     policy_fn = policy_fn_name(policy)
-    learn(policy_fn, env, seed, nsteps=25, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=1e-2, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=True, particleEnv=True, model_name='partEnv_model_', log_interval=100, communication=communication)
+    learn(policy_fn, env, seed, nsteps=5, nstack=1, total_timesteps=int(num_timesteps * 1.1), lr=2e-3, lrschedule=lrschedule, continuous_actions=continuous_actions, numAgents=numAgents, continueTraining=False, debug=True, particleEnv=True, model_name='partEnv_model_', log_interval=50, communication=communication)
 
 def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
     iters = 100
@@ -233,7 +237,7 @@ def test(env_id, policy_name, seed, nstack=1, numAgents=2, benchmark=False):
 
             obs, rewards, dones, _ = env.step(actions)
             dones = dones.flatten()
-            total_rewards += rewards
+            total_rewards += rewards # wrong?
             print(total_rewards)
             # print(dones)
                 # img = get_img(env)
@@ -275,7 +279,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--env', help='environment ID', default='simple_speaker_listener')
-    parser.add_argument('--seed', help='RNG seed', type=int, default=0)
+    parser.add_argument('--seed', help='RNG seed', type=int, default=200)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='mlp')
     parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'], default='constant')
     parser.add_argument('--num-timesteps', type=int, default=int(1e7))
@@ -293,9 +297,10 @@ if __name__ == '__main__':
     '''
     continuous_actions = False
     numAgents = 2
-
+    t = time.time()
     if args.test:
         test(args.env, args.policy, args.seed, nstack=1)
     else:
         train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-              policy=args.policy, lrschedule=args.lrschedule, num_cpu=8, continuous_actions=continuous_actions, numAgents=numAgents)
+              policy=args.policy, lrschedule=args.lrschedule, num_cpu=64, continuous_actions=continuous_actions, numAgents=numAgents)
+    print('Execution Time: ', (time.time()-t)/60.0, ' minutes')

@@ -27,12 +27,12 @@ class VecNormalize(VecEnv):
         obs, rews, news, infos = self.venv.step(vac)
         self.ret = self.ret * self.gamma + rews
         obs = self._obfilt(obs)
-        if self.ret_rms: 
+        if self.ret_rms:
             self.ret_rms.update(self.ret)
             rews = np.clip(rews / np.sqrt(self.ret_rms.var + self.epsilon), -self.cliprew, self.cliprew)
         return obs, rews, news, infos
     def _obfilt(self, obs):
-        if self.ob_rms: 
+        if self.ob_rms:
             self.ob_rms.update(obs)
             obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)
             return obs
@@ -74,7 +74,7 @@ class RunningMeanStd(object):
         delta = batch_mean - self.mean
         tot_count = self.count + batch_count
 
-        new_mean = self.mean + delta * batch_count / tot_count        
+        new_mean = self.mean + delta * batch_count / tot_count
         m_a = self.var * (self.count)
         m_b = batch_var * (batch_count)
         M2 = m_a + m_b + np.square(delta) * self.count * batch_count / (self.count + batch_count)
@@ -84,7 +84,7 @@ class RunningMeanStd(object):
 
         self.mean = new_mean
         self.var = new_var
-        self.count = new_count        
+        self.count = new_count
 
 def test_runningmeanstd():
     for (x1, x2, x3) in [

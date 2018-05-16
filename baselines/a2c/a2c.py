@@ -10,7 +10,7 @@ from baselines import logger
 from baselines.common import set_global_seeds, explained_variance
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 
-from baselines.a2c.utils import discount_with_dones
+# from baselines.a2c.utils import discount_with_dones
 from baselines.a2c.utils import Scheduler, make_path, find_trainable_variables
 from baselines.a2c.policies import CnnPolicy
 from baselines.a2c.utils import cat_entropy, mse
@@ -224,9 +224,9 @@ class Runner(object):
         self.numAgents = numAgents
         if particleEnv == False:
             nh, nw, nc = env.observation_space.shape
-            nenv = env.num_envs
-            self.batch_ob_shape = (nenv*nsteps, nh, nw, nc*nstack)
-            self.obs = np.zeros((nenv, nh, nw, nc*nstack), dtype=np.uint8)
+            self.nenv = env.num_envs
+            self.batch_ob_shape = (self.nenv*nsteps, nh, nw, nc*nstack)
+            self.obs = np.zeros((self.nenv, nh, nw, nc*nstack), dtype=np.uint8)
             self.nc = nc
         else:
             # ob_shape = model[0].step_model.ob_shape
@@ -276,7 +276,7 @@ class Runner(object):
         self.obs[:, :, :, -self.nc:] = obs
 
     def run(self): # need to fix obs
-        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones = [],[],[],[],[]
+        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_success = [],[],[],[],[],[]
         mb_states = self.states
         if self.particleEnv == False:
             actions, values, states = self.model.step(self.obs, self.states, self.dones)
@@ -320,7 +320,10 @@ class Runner(object):
         if self.particleEnv == False:
             obs, rewards, dones, _ = self.env.step(np.asarray(actions), self.ind)
         else:
-            obs, rewards, dones, _ = self.env.step(actions) # steps through all envs
+            obs, rewards, dones, success, _ = self.env.step(actions) # steps through all envs
+            self.success = success
+            if min(self.success) >= 0:
+                mb_success.append(np.asarray(self.success).flatten())
             # print('env step obs: ', obs.shape)
             # print(obs)
             # assert 1==0
@@ -335,6 +338,7 @@ class Runner(object):
         #     plt.pause(0.01)
         self.states = states
         self.dones = dones
+        # print('success: ', success)
         if self.particleEnv==False:
             mb_dones.append(self.dones)
         # print('mb_dones: ', mb_dones)
@@ -365,6 +369,7 @@ class Runner(object):
         #     plt.pause(0.1)
         mb_rewards.append(rewards)
         mb_dones.append(self.dones)
+            # print(mb_success)
         #batch of steps to batch of rollouts
         # mb_obs = np.asarray(mb_obs, dtype=np.uint8).swapaxes(1, 0).reshape(self.batch_ob_shape)
         if self.particleEnv==False:
@@ -375,7 +380,8 @@ class Runner(object):
             mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
             # print(mb_dones)
             # mb_masks = mb_dones[:-1]
-            mb_masks = mb_dones[:, :-1]
+            mb_masks = mb_dones[:, self.ind]
+            # mb_masks = mb_dones[:, :-1]
             # mb_dones = mb_dones[1:]
             mb_dones = mb_dones[:, 1:]
             # print(mb_masks)
@@ -410,26 +416,26 @@ class Runner(object):
         # print('runner actions: ', mb_actions.shape)
         # print('runner obs: ', mb_obs.shape)
         # print('runner values: ', mb_values.shape)
-        for n, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
+        # for n, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
             # print(dones)
-            rewards = rewards.tolist()
-            dones = dones.tolist()
+            # rewards = rewards.tolist()
+            # dones = dones.tolist()
             # print(np.asarray(rewards))
             # print(dones)
-            if type(dones) == list:
-                # print(dones)
-                if dones[-1] == 0:
-                    rewards = discount_with_dones(rewards+[value], dones+[0], self.gamma, particleEnv=self.particleEnv)[:-1] # ERROR
-                else:
-                    rewards = discount_with_dones(rewards, dones, self.gamma, particleEnv=self.particleEnv)
-            else:
-                if dones == 0:
-                    rewards = discount_with_dones(rewards+[value], dones+[0], self.gamma, particleEnv=self.particleEnv)[:-1] # ERROR
-                else:
-                    rewards = discount_with_dones(rewards, dones, self.gamma, particleEnv=self.particleEnv)
+            # if type(dones) == list:
+            #     # print(dones)
+            #     if dones[-1] == 0:
+            #         rewards = discount_with_dones(rewards+[value], dones+[0], self.gamma, particleEnv=self.particleEnv)[:-1] # ERROR
+            #     else:
+            #         rewards = discount_with_dones(rewards, dones, self.gamma, particleEnv=self.particleEnv)
+            # else:
+            #     if dones == 0:
+            #         rewards = discount_with_dones(rewards+[value], dones+[0], self.gamma, particleEnv=self.particleEnv)[:-1] # ERROR
+            #     else:
+            #         rewards = discount_with_dones(rewards, dones, self.gamma, particleEnv=self.particleEnv)
             # print('rewards:', rewards)
             # print('mb_rewards: ', mb_rewards[n])
-            mb_rewards[n] = rewards
+            # mb_rewards[n] = rewards
         if self.particleEnv == False:
             mb_rewards = mb_rewards.flatten()
         # print(mb_actions)
@@ -437,27 +443,32 @@ class Runner(object):
         mb_values = mb_values.flatten()
         mb_masks = mb_masks.flatten()
         # print('mb_action ', mb_actions)
-        # if self.particleEnv == True:
-        if self.env.name == 'simple_reference':
-            action_per_agent = 2
-            mb_actions = mb_actions.reshape(self.numAgents, action_per_agent, self.nenv)
-        elif self.particleEnv == True:
-            mb_actions = mb_actions.reshape(self.numAgents, self.nenv)
-        mb_masks = mb_masks.reshape(self.numAgents, self.nenv)
-        mb_values = mb_values.reshape(self.numAgents, self.nenv)
+        if self.particleEnv == True:
+            if self.env.name == 'simple_reference':
+                action_per_agent = 2
+                mb_actions = mb_actions.reshape(self.numAgents, action_per_agent, self.nenv)
+            else:
+                mb_actions = mb_actions.reshape(self.numAgents, self.nenv)
+            mb_masks = mb_masks.reshape(self.numAgents, self.nenv)
+            mb_values = mb_values.reshape(self.numAgents, self.nenv)
         # print('mb_rewards')
         # print(mb_rewards)
-        return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values
+        return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values # , mb_success
 
-def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_coef=0.9, ent_coef=0.01, max_grad_norm=0.5, lr=7e-4, lrschedule='linear', epsilon=1e-5, alpha=0.99, gamma=0.99, log_interval=100, continuous_actions=True, debug=False, numAgents=2, continueTraining=True, particleEnv=False, model_name='Apr3_test_model_', communication=False):
+def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_coef=0.9, ent_coef=0.01, max_grad_norm=0.5, lr=7e-4, lrschedule='linear', epsilon=1e-5, alpha=0.99, gamma=0.99, log_interval=20, continuous_actions=True, debug=False, numAgents=2, continueTraining=False, particleEnv=False, model_name='May15_test_model_', communication=False):
     timesteps = 100000
     print('nsteps:', nsteps)
-    time.sleep(1)
+    # time.sleep(1)
     tf.reset_default_graph()
     # if particleEnv == False:
     set_global_seeds(seed)
     avg_rwd_data = []
     episode_rwd_data = []
+    timesteps_data = []
+    policy_loss_data = [[], []]
+    value_loss_data = [[], []]
+    exp_var_data = [[], []]
+    success_data = []
     nenvs = env.num_envs
     print('Number of Environments: ', nenvs)
     print('Number of Steps', nsteps)
@@ -485,7 +496,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
     # print(model[0])
     if continueTraining == True:
         for i in range(numAgents):
-            m_name = model_name +str(i) +'_600k.pkl'
+            m_name = model_name +str(i)+'.pkl' # +'_600k.pkl'
             model[i].load(m_name)
             print('---------------------------------------------')
             print('Successfully Loaded ', m_name)
@@ -507,6 +518,9 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
 
     tstart = time.time()
     stored_rewards = [[], []]
+    success = []
+    percent_exp = []
+    percent_exp_data = []
     for update in range(1, total_timesteps//nbatch+1):
         if numAgents == 1:
             obs, states, rewards, masks, actions, values = runner.run()
@@ -522,7 +536,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
             policy_entropy = []
             ev = []
             for i in range(nsteps):
-                    obs_, states_, rewards_, masks_, actions_, values_ = runner.run()
+                    obs_, states_, rewards_, masks_, actions_, values_, success_ = runner.run()
                     # print('Runner Shapes')
                     # print(obs_.shape)
                     # print(rewards_.shape)
@@ -532,6 +546,9 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                     # print('values: ', values_[:, 0])
                     # assert 1==0
                     # print('masks: ', masks_)
+                    # print(rewards_)
+                    if success_:
+                        success.append(success_)
                     for j in range(numAgents):
                         if runner.env.name == 'simple_reference':
                             obs[j].append(obs_[:,:,j])
@@ -541,12 +558,14 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                             values[j].append(values_[j])
                             masks[j].append(masks_[j])
                         else:
+                            # print('values: ', values_[j, :])
                             obs[j].append(obs_[:,:,j])
                             states[j].append(states[0])
                             rewards[j].append(rewards_[:,:,j])
                             actions[j].append(actions_[j, :])
                             values[j].append(values_[j, :])
                             masks[j].append(masks_[j, :])
+                        # print('reward: ', rewards_[:, :, j])
                         stored_rewards[j].append(rewards_[:, :, j])
                         # print('rewards: ', rewards_[:, :, j])
 
@@ -565,20 +584,26 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
             for j in range(nsteps):
                 for i in range(numAgents): # Need to rewrite so that agents take turns stepping
                     # obs[i], states[i], rewards[i], masks[i], actions[i], values[i] = runner[i].run()
-                    obs_, states_, rewards_, masks_, actions_, values_ = runner[i].run()
+                    obs_, states_, rewards_, masks_, actions_, values_, = runner[i].run()
                     obs[i].append(obs_) # (obs_.shape = (6, 3, 3, 84))
                     states[i].append(states_)
                     rewards[i].append(rewards_)
                     masks[i].append(masks_)
                     actions[i].append(actions_)
                     values[i].append(values_)
-
+                    if runner[i].dones[0] == True:
+                        for k in range(nenvs):
+                            percent_exp.append(runner[i].env.envs[k].env.percent_explored[i])
+                    stored_rewards[i].append(rewards_)
             # print(np.asarray(values).shape)
         if numAgents == 1:
             policy_loss, value_loss, policy_entropy = model.train(obs, states, rewards, masks, actions, values)
         elif particleEnv == False:
             for i in range(numAgents):
                 # print(masks[i])
+                np.asarray(values[i]).reshape(nbatch)
+                np.asarray(rewards[i]).reshape(nbatch)
+                np.asarray(masks[i]).reshape(nbatch)
                 policy_loss_, value_loss_, policy_entropy_ = model[i].train(np.asarray(obs[i]).reshape(nbatch, 84, 84, 3), states[i], np.asarray(rewards[i]).reshape(nbatch), np.asarray(masks[i]).reshape(nbatch), np.asarray(actions[i]).reshape(nbatch), np.asarray(values[i]).reshape(nbatch))
                 policy_loss.append(policy_loss_)
                 value_loss.append(value_loss_)
@@ -595,7 +620,7 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                     actions_i = actions_i.swapaxes(0, 1).reshape(actions_per_agent, nbatch)
                     action_n = [actions_i[1], actions_i[0]]
                     policy_loss_, value_loss_, policy_entropy_ = model[i].train(np.asarray(obs[i]).reshape(nbatch, 21), states[i], np.asarray(rewards[i]).reshape(nbatch), np.asarray(masks[i]).reshape(nbatch), action_n, np.asarray(values[i]).reshape(nbatch))
-                elif runner.env.name == 'simple_speaker_listener':
+                elif runner.env.name == 'simple_speaker_listener' or runner.env.name == 'simple_push':
                     actions_ = np.asarray(actions)
                     actions_i = actions_[i, :, :]
                     # print('obs shape: ', np.asarray(obs).shape)
@@ -621,6 +646,14 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
         nseconds = time.time()-tstart
         fps = float((update*nbatch)/nseconds)
         if update % log_interval == 0 or update == 1:
+            # print(success)
+            # print(np.sum(np.asarray(success).flatten()))
+            # print(np.size(np.asarray(success).flatten()))
+            success_rate = np.mean(success)
+            success_data.append(success_rate)
+            percent_exp_data.append(np.mean(percent_exp))
+            sio.savemat('percent_exp.mat', {'percent_exp':np.asarray(percent_exp_data)})
+            sio.savemat('success.mat', {'success_rate':np.asarray(success_data)})
             for i in range(numAgents):
                 logger.record_tabular("*Model Number*", i)
                 logger.record_tabular("nupdates", update)
@@ -629,36 +662,64 @@ def learn(policy, env, seed, nsteps=5, nstack=1, total_timesteps=int(80e6), vf_c
                 rewards_i = np.asarray(stored_rewards[i])
                 # print(rewards_i)
                 avg_rwd = np.mean(rewards_i.flatten())
-                print('rwd shape: ', rewards_i.shape)
+                # print('rwd shape: ', rewards_i.shape)
                 episode_reward = []
                 for j in range(nenvs):
-                    episode_reward.append(np.mean(rewards_i[:, :, j]))
+                    if particleEnv == False:
+                        episode_reward.append(np.mean(rewards_i[:, j]))
+                    else:
+                        episode_reward.append(np.mean(rewards_i[:, :, j]))
                 print('min_eps_rwd: ', np.min(episode_reward))
                 print('max_eps_rwd: ', np.max(episode_reward))
+                # print('all rewards: ', rewards_i)
                 logger.record_tabular("average agent reward", avg_rwd)
                 avg_rwd_data.append(avg_rwd)
                 episode_rwd_data.append(episode_reward)
+                timesteps_data.append(update*nbatch)
+                value_loss_data[i].append(float(value_loss[i]))
+                exp_var_data[i].append(float(ev[i]))
+                # percent_exp_data.append(np.mean(percent_exp))
                 sio.savemat('reward_data.mat', {'avg_rwd':np.asarray(avg_rwd_data)})
                 sio.savemat('episode_reward_data.mat', {'episode_avg_rwd':np.asarray(episode_rwd_data)})
+                sio.savemat('timesteps.mat', {'timesteps':np.asarray(timesteps_data)})
                 # logger.record_tabular("average episode reward", np.mean(episode_reward))
-                if runner.env.name != 'simple_reference':
+                if particleEnv == False:
+                    policy_loss_data[i].append(float(policy_loss[i]))
                     logger.record_tabular("policy_entropy", float(policy_entropy[i]))
                     logger.record_tabular("value_loss",float(value_loss[i]))
                     logger.record_tabular("policy_loss", float(policy_loss[i]))
                     logger.record_tabular("explained_variance", ev[i])
+                    # logger.record_tabular("success rate", success_rate)
+                    logger.record_tabular("percent_explored", float(np.mean(percent_exp)))
+                    logger.dump_tabular()
+                elif runner.env.name != 'simple_reference':
+                    policy_loss_data[i].append(float(policy_loss[i]))
+                    logger.record_tabular("policy_entropy", float(policy_entropy[i]))
+                    logger.record_tabular("value_loss",float(value_loss[i]))
+                    logger.record_tabular("policy_loss", float(policy_loss[i]))
+                    logger.record_tabular("explained_variance", ev[i])
+                    logger.record_tabular("success rate", success_rate)
+                    # logger.record_tabular("percent_explored", float(np.mean(percent_exp))
                     logger.dump_tabular()
                 else:
+                    policy_loss_data[i].append([float(policy_loss[i][0]), float(policy_loss[i][0])])
                     logger.record_tabular("comm_policy_entropy", float(policy_entropy[i][0]))
                     logger.record_tabular("force_policy_entropy", float(policy_entropy[i][1]))
                     logger.record_tabular("value_loss",float(value_loss[i]))
                     logger.record_tabular("comm_policy_loss", float(policy_loss[i][0]))
                     logger.record_tabular("force_policy_loss", float(policy_loss[i][1]))
                     logger.record_tabular("explained_variance", ev[i])
+                    logger.record_tabular("success rate", success_rate)
                     logger.dump_tabular()
+                sio.savemat('policy_loss.mat', {'policy_loss':np.asarray(policy_loss_data)})
+                sio.savemat('value_loss.mat', {'value_loss':np.asarray(value_loss_data)})
+                sio.savemat('exp_var.mat', {'exp_var':np.asarray(exp_var_data)})
                 m_name = model_name + str(i) + '.pkl'
                 model[i].save(m_name)
                 # print('Saving model as ', m_name)
             stored_rewards = [[], []]
+            success = []
+            percent_exp = []
 
         if particleEnv == False:
             if update*nbatch > timesteps:

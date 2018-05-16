@@ -44,6 +44,7 @@ class GymVecEnv(VecEnv):
         # print('action_n = ' + str(action_n))
         for (a,env) in zip(action_n, self.envs):
             ob, rew, done, info = env.step(a, ind) # MAY NOT BE CORRECT
+            # print(rew)
             # plt.imshow(ob)
             # plt.draw()
             # plt.pause(0.000001)
